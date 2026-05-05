@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/database/database_helper.dart';
+import '../utils/validators.dart';
 
 enum SyncOperation { create, update, delete }
 
@@ -77,11 +78,25 @@ class SyncProvider with ChangeNotifier {
             whereArgs: [item['id']],
           );
         } else {
-          // Incrementa tentativas
-          await db.rawUpdate(
-            'UPDATE ${DatabaseHelper.tableSyncQueue} SET attempts = attempts + 1 WHERE id = ?',
-            [item['id']],
-          );
+          final attempts = (item['attempts'] ?? 0) as int;
+          const maxAttempts = 5;  // Máximo de tentativas
+          
+          if (attempts >= maxAttempts) {
+            // Marcar como falha permanente após máximo de tentativas
+            await db.update(
+              DatabaseHelper.tableSyncQueue,
+              {'status': 'failed', 'synced_at': DateTime.now().toIso8601String()},
+              where: 'id = ?',
+              whereArgs: [item['id']],
+            );
+            debugPrint('[SYNC_DEBUG] Item ${item['id']} marcado como FAILED após $maxAttempts tentativas');
+          } else {
+            // Incrementa tentativas para tentar novamente
+            await db.rawUpdate(
+              'UPDATE ${DatabaseHelper.tableSyncQueue} SET attempts = attempts + 1 WHERE id = ?',
+              [item['id']],
+            );
+          }
         }
       }
     } catch (e) {
@@ -143,29 +158,42 @@ class SyncProvider with ChangeNotifier {
 
   Future<String?> _uploadLocalImage(String? localPath, String folder, String? companyId) async {
     if (localPath == null || localPath.isEmpty) return localPath;
-    if (localPath.startsWith('http') || localPath.contains('supabase.co')) return localPath; // Já é URL
+    if (localPath.startsWith('http') || localPath.contains('supabase.co')) return localPath;
     
     try {
-      // Se o path é apenas o caminho no bucket (ex: uuid/obras/123.jpg), converter para URL pública
       if (companyId != null && localPath.startsWith(companyId)) {
         return _supabase.storage.from('fotos-relatorios').getPublicUrl(localPath);
       }
 
       final file = File(localPath);
-      if (!file.existsSync()) return localPath; // Arquivo não existe, mantém original
+      if (!file.existsSync()) return localPath;
       
-      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      // Validar tipo de arquivo (apenas imagens)
+      final ext = localPath.split('.').last.toLowerCase();
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      if (!allowedExtensions.contains(ext)) {
+        debugPrint('[SYNC_DEBUG] Tipo de arquivo não permitido: $ext');
+        return null;
+      }
+      
+      // Validar tamanho máximo (10 MB)
+      const maxSizeBytes = 10 * 1024 * 1024;
+      if (file.lengthSync() > maxSizeBytes) {
+        debugPrint('[SYNC_DEBUG] Arquivo muito grande: ${file.lengthSync()} bytes');
+        return null;
+      }
+      
+      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
       final String storagePath = '$companyId/$folder/$fileName';
       await _supabase.storage.from('fotos-relatorios').upload(
         storagePath,
         file,
         fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
       );
-      // Obter a URL pública logo após o upload
       return _supabase.storage.from('fotos-relatorios').getPublicUrl(storagePath);
     } catch (e) {
-      debugPrint('[SYNC_DEBUG] Erro critico no upload de imagem $folder: $e');
-      return localPath;
+      debugPrint('[SYNC_DEBUG] Erro crítico no upload de imagem: $e');
+      return null;
     }
   }
 

@@ -15,13 +15,6 @@ class RelatoriosProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
 
   Future<void> loadRelatorios({required String? companyId, int? constructionId}) async {
-    if (companyId == null) {
-      _relatorios = [];
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-
     _isLoading = true;
     notifyListeners();
 
@@ -29,19 +22,37 @@ class RelatoriosProvider with ChangeNotifier {
     List<Map<String, dynamic>> maps;
 
     if (constructionId != null) {
-      maps = await db.query(
-        DatabaseHelper.tableRelatorios,
-        where: 'construction_id = ? AND id_da_empresa = ?',
-        whereArgs: [constructionId, companyId],
-        orderBy: 'created_at DESC',
-      );
+      // Se companyId é null (admin), carrega de TODAS as empresas
+      if (companyId == null) {
+        maps = await db.query(
+          DatabaseHelper.tableRelatorios,
+          where: 'construction_id = ?',
+          whereArgs: [constructionId],
+          orderBy: 'created_at DESC',
+        );
+      } else {
+        maps = await db.query(
+          DatabaseHelper.tableRelatorios,
+          where: 'construction_id = ? AND id_da_empresa = ?',
+          whereArgs: [constructionId, companyId],
+          orderBy: 'created_at DESC',
+        );
+      }
     } else {
-      maps = await db.query(
-        DatabaseHelper.tableRelatorios,
-        where: 'id_da_empresa = ?',
-        whereArgs: [companyId],
-        orderBy: 'created_at DESC',
-      );
+      // Se companyId é null (admin), carrega de TODAS as empresas
+      if (companyId == null) {
+        maps = await db.query(
+          DatabaseHelper.tableRelatorios,
+          orderBy: 'created_at DESC',
+        );
+      } else {
+        maps = await db.query(
+          DatabaseHelper.tableRelatorios,
+          where: 'id_da_empresa = ?',
+          whereArgs: [companyId],
+          orderBy: 'created_at DESC',
+        );
+      }
     }
 
     _relatorios = maps.map((map) => Relatorio.fromMap(map)).toList();

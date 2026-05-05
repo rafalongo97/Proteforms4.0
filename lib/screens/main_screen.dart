@@ -49,25 +49,38 @@ class _MainScreenState extends State<MainScreen> {
       // 1. Iniciar Sincronização (Pull) do Servidor para o Local
       if (auth.isLoggedIn && auth.profile?.companyId != null) {
         final companyId = auth.profile!.companyId!;
+        final isAdmin = auth.profile!.isAdmin;
+        final loadCompanyId = isAdmin ? null : companyId;
         
-        // Rodamos o Pull primeiro e depois atualizamos os providers
-        context.read<SyncProvider>().pullEverything(companyId).then((_) {
-          if (!mounted) return;
-          
-          // 2. Carregar dados locais para a interface
+        // Rodamos o Pull primeiro (apenas não-admins) e depois atualizamos os providers
+        if (!isAdmin) {
+          context.read<SyncProvider>().pullEverything(companyId).then((_) {
+            if (!mounted) return;
+            
+            // 2. Carregar dados locais para a interface
+            Future.wait([
+              context.read<ObrasProvider>().loadObras(loadCompanyId),
+              context.read<RelatoriosProvider>().loadRelatorios(companyId: loadCompanyId),
+              context.read<ConfiguracaoProvider>().loadConfiguracao(
+                loadCompanyId,
+                defaultName: auth.profile?.companyName,
+                defaultCnpj: auth.profile?.cnpj,
+                defaultEmail: auth.profile?.email,
+              ),
+              context.read<ResponsaveisProvider>().loadResponsaveis(loadCompanyId),
+              context.read<ChecklistProvider>().loadModels(loadCompanyId),
+            ]);
+          });
+        } else {
+          // Para admins, apenas carregar do SQLite (sem sincronização Supabase)
           Future.wait([
-            context.read<ObrasProvider>().loadObras(companyId),
-            context.read<RelatoriosProvider>().loadRelatorios(companyId: companyId),
-            context.read<ConfiguracaoProvider>().loadConfiguracao(
-              companyId,
-              defaultName: auth.profile?.companyName,
-              defaultCnpj: auth.profile?.cnpj,
-              defaultEmail: auth.profile?.email,
-            ),
-            context.read<ResponsaveisProvider>().loadResponsaveis(companyId),
-            context.read<ChecklistProvider>().loadModels(companyId),
+            context.read<ObrasProvider>().loadObras(null),
+            context.read<RelatoriosProvider>().loadRelatorios(companyId: null),
+            context.read<ConfiguracaoProvider>().loadConfiguracao(null),
+            context.read<ResponsaveisProvider>().loadResponsaveis(null),
+            context.read<ChecklistProvider>().loadModels(null),
           ]);
-        });
+        }
       }
     });
   }

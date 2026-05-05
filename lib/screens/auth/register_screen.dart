@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_provider.dart';
 import '../../utils/notification_helper.dart';
+import '../../utils/validators.dart';
 import '../main_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -360,8 +361,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ],
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Informe o CNPJ';
-                    final digits = v.replaceAll(RegExp(r'\D'), '');
-                    if (digits.length != 14) return 'CNPJ deve ter 14 dígitos';
+                    if (!isValidCNPJ(v)) return 'CNPJ inválido';
                     return null;
                   },
                 ),

@@ -97,26 +97,32 @@ class _LoginScreenState extends State<LoginScreen> {
       // Carrega dados iniciais da empresa
       if (mounted) {
         final auth = context.read<AuthProvider>();
+        final isAdmin = auth.profile?.isAdmin ?? false;
         final companyId = auth.profile?.companyId;
         final syncProvider = context.read<SyncProvider>();
 
         if (companyId != null) {
-          // No primeiro login, aguardamos o pull inicial para garantir que o app não abra vazio
-          await syncProvider.pullEverything(companyId);
+          // Admins carregam tudo (companyId = null), usuários limitados carregam apenas sua empresa
+          final loadCompanyId = isAdmin ? null : companyId;
+          
+          // No primeiro login, aguardamos o pull inicial (apenas não-admins)
+          if (!isAdmin) {
+            await syncProvider.pullEverything(companyId);
+          }
           
           if (mounted) {
-            // Após o pull (Supabase -> SQLite), carregamos do SQLite para os Providers
+            // Após o pull, carregamos do SQLite para os Providers
             await Future.wait([
-              context.read<ObrasProvider>().loadObras(companyId),
-              context.read<RelatoriosProvider>().loadRelatorios(companyId: companyId),
+              context.read<ObrasProvider>().loadObras(loadCompanyId),
+              context.read<RelatoriosProvider>().loadRelatorios(companyId: loadCompanyId),
               context.read<ConfiguracaoProvider>().loadConfiguracao(
-                companyId,
+                loadCompanyId,
                 defaultName: auth.profile?.companyName,
                 defaultCnpj: auth.profile?.cnpj,
                 defaultEmail: auth.profile?.email,
               ),
-              context.read<ResponsaveisProvider>().loadResponsaveis(companyId),
-              context.read<ChecklistProvider>().loadModels(companyId),
+              context.read<ResponsaveisProvider>().loadResponsaveis(loadCompanyId),
+              context.read<ChecklistProvider>().loadModels(loadCompanyId),
             ]);
           }
         }

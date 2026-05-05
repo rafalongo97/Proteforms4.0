@@ -10,22 +10,23 @@ class ResponsaveisProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   Future<void> loadResponsaveis(String? companyId) async {
-    if (companyId == null) {
-      _responsaveis = [];
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-
     _isLoading = true;
     notifyListeners();
 
     final db = await DatabaseHelper.instance.database;
-    final maps = await db.query(
-      DatabaseHelper.tableResponsaveisTecnicos,
-      where: 'id_da_empresa = ?',
-      whereArgs: [companyId],
-    );
+    final maps;
+
+    // Se companyId é null (admin), carrega de TODAS as empresas
+    if (companyId == null) {
+      maps = await db.query(DatabaseHelper.tableResponsaveisTecnicos);
+    } else {
+      // Se companyId é fornecido, filtra por empresa (usuário limitado)
+      maps = await db.query(
+        DatabaseHelper.tableResponsaveisTecnicos,
+        where: 'id_da_empresa = ?',
+        whereArgs: [companyId],
+      );
+    }
 
     _responsaveis = maps.map((map) => ResponsavelTecnico.fromMap(map)).toList();
     

@@ -10,22 +10,23 @@ class ConfiguracaoProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
 
   Future<void> loadConfiguracao(String? companyId, {String? defaultName, String? defaultCnpj, String? defaultEmail}) async {
-    if (companyId == null) {
-      _configuracao = null;
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-
     _isLoading = true;
     notifyListeners();
 
     final db = await DatabaseHelper.instance.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      DatabaseHelper.tableConfiguracoes,
-      where: 'id_da_empresa = ?',
-      whereArgs: [companyId],
-    );
+    final List<Map<String, dynamic>> maps;
+
+    // Se companyId é null (admin), carrega de TODAS as empresas
+    if (companyId == null) {
+      maps = await db.query(DatabaseHelper.tableConfiguracoes);
+    } else {
+      // Se companyId é fornecido, filtra por empresa (usuário limitado)
+      maps = await db.query(
+        DatabaseHelper.tableConfiguracoes,
+        where: 'id_da_empresa = ?',
+        whereArgs: [companyId],
+      );
+    }
 
     if (maps.isNotEmpty) {
       _configuracao = Configuracao.fromMap(maps.first);

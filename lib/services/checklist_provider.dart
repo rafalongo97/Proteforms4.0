@@ -8,19 +8,24 @@ class ChecklistProvider with ChangeNotifier {
   List<ChecklistModel> get models => _models;
 
   Future<void> loadModels(String? companyId) async {
-    if (companyId == null) {
-      _models = [];
-      notifyListeners();
-      return;
-    }
-
     final db = await DatabaseHelper.instance.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      DatabaseHelper.tableChecklistModels,
-      where: 'id_da_empresa = ?',
-      whereArgs: [companyId],
-      orderBy: 'id DESC',
-    );
+    final List<Map<String, dynamic>> maps;
+
+    // Se companyId é null (admin), carrega de TODAS as empresas
+    if (companyId == null) {
+      maps = await db.query(
+        DatabaseHelper.tableChecklistModels,
+        orderBy: 'id DESC',
+      );
+    } else {
+      // Se companyId é fornecido, filtra por empresa (usuário limitado)
+      maps = await db.query(
+        DatabaseHelper.tableChecklistModels,
+        where: 'id_da_empresa = ?',
+        whereArgs: [companyId],
+        orderBy: 'id DESC',
+      );
+    }
     _models = maps.map((map) => ChecklistModel.fromMap(map)).toList();
     notifyListeners();
   }
